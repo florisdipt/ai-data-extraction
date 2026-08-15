@@ -39,5 +39,10 @@ if [[ -z "${AI_DATA_EXTRACTION_HOST_ID:-}" ]]; then
 fi
 export AI_DATA_EXTRACTION_DATA_DIR="${AI_DATA_EXTRACTION_DATA_DIR:-${HOME}/.local/share/ai-data-extraction}"
 
+repo_config="${REPO_ROOT}/.config/ai-data-extraction/config.json"
+if [[ -z "${AI_DATA_EXTRACTION_CONFIG:-}" && -f "${repo_config}" ]]; then
+    export AI_DATA_EXTRACTION_CONFIG="${repo_config}"
+fi
+
 echo "Running one manual macOS extraction for ${AI_DATA_EXTRACTION_HOST_ID}."
 exec "${REPO_ROOT}/scripts/run_backup_once.sh" "$@"
