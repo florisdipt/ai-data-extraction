@@ -66,7 +66,11 @@ esac
 EOF
 chmod 700 "${bashrc_hook}"
 
-marker='source "$HOME/.config/ai-data-extraction/bashrc-hook.sh"'
+if [[ "${CONFIG_DIR}" == "${HOME}/.config/ai-data-extraction" ]]; then
+    marker='source "$HOME/.config/ai-data-extraction/bashrc-hook.sh"'
+else
+    marker="source \"${CONFIG_DIR}/bashrc-hook.sh\""
+fi
 if ! grep -Fqx "${marker}" "${HOME}/.bashrc" 2>/dev/null; then
     printf '\n%s\n' "${marker}" >> "${HOME}/.bashrc"
 fi
