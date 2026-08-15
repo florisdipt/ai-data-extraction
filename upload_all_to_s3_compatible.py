@@ -201,8 +201,9 @@ def main(argv=None):
     args = parse_args(argv)
     config_path = find_config(args.config)
     config = load_config(config_path)
-    configured_data_dir = config_value(config, "data_dir", default=os.environ.get("AI_DATA_EXTRACTION_DATA_DIR"))
-    data_dir = (args.data_dir or Path(configured_data_dir or default_data_dir())).expanduser().resolve()
+    configured_data_dir = config_value(config, "data_dir")
+    environment_data_dir = os.environ.get("AI_DATA_EXTRACTION_DATA_DIR")
+    data_dir = (args.data_dir or Path(environment_data_dir or configured_data_dir or default_data_dir())).expanduser().resolve()
     host_id = args.host_id or config_value(
         config,
         "host_id",
