@@ -25,7 +25,7 @@ if [[ "${PYTHON_BIN}" != "${REPO_ROOT}/.venv/bin/python3" ]]; then
     PYTHON_BIN="${REPO_ROOT}/.venv/bin/python3"
 fi
 
-if ! "${PYTHON_BIN}" -c 'import boto3' >/dev/null 2>&1; then
+if ! "${PYTHON_BIN}" -c 'import minio' >/dev/null 2>&1; then
     "${PYTHON_BIN}" -m pip install -r "${REPO_ROOT}/requirements.txt"
 fi
 

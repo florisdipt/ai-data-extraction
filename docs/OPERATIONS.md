@@ -53,9 +53,11 @@ not install a launchd job or change the macOS scheduler.
 
 ## Recovery
 
-The uploader never calls an object-delete operation. If a run stops during an
-upload, run the same command again. Existing verified objects are skipped and
-missing objects upload on the next run.
+The uploader never calls an object-delete operation or a per-object `HEAD`
+request. It lists the host prefix once and compares object size and SHA-256
+metadata locally. If a run stops during an upload, run the same command again.
+Existing matching objects are skipped and missing objects upload on the next
+run.
 
 To restore one object, download it from its host prefix and compare its
 SHA-256 value with the object metadata and the local run manifest.

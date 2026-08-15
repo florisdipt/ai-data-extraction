@@ -10,6 +10,7 @@ import socket
 import stat
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 def default_data_dir():
@@ -92,12 +93,24 @@ def find_config(explicit):
     raise RuntimeError("no S3 configuration found")
 
 
+def endpoint_parts(endpoint):
+    parsed = urlparse(str(endpoint))
+    if parsed.scheme:
+        if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.path not in ("", "/"):
+            raise RuntimeError("S3 endpoint must be an HTTP(S) host URL")
+        return parsed.netloc, parsed.scheme == "https"
+    endpoint = str(endpoint).rstrip("/")
+    if not endpoint:
+        raise RuntimeError("S3 endpoint is required")
+    return endpoint, True
+
+
 def build_client(config):
     try:
-        import boto3
-        from botocore.config import Config
+        import urllib3
+        from minio import Minio
     except ImportError as error:
-        raise RuntimeError("boto3 is required. Install requirements.txt") from error
+        raise RuntimeError("minio is required. Install requirements.txt") from error
 
     endpoint_url = config_value(config, "endpoint_url", "endpoint", default=os.environ.get("S3_ENDPOINT_URL"))
     region_name = config_value(config, "region", default=os.environ.get("AWS_REGION", "global"))
@@ -118,30 +131,38 @@ def build_client(config):
     if not endpoint_url or not access_key_id or not secret_access_key:
         raise RuntimeError("S3 endpoint and credentials are required")
 
-    client_config = Config(
-        signature_version="s3v4",
-        s3={"addressing_style": "path"},
-        retries={"mode": "standard", "max_attempts": 5},
+    endpoint, secure = endpoint_parts(endpoint_url)
+    http_client = urllib3.PoolManager(
+        timeout=urllib3.Timeout(connect=5.0, read=30.0),
+        retries=urllib3.Retry(
+            total=3,
+            connect=3,
+            read=3,
+            status=3,
+            redirect=0,
+            backoff_factor=0.2,
+            status_forcelist=(500, 502, 503, 504),
+            allowed_methods=frozenset(("GET", "PUT", "POST")),
+            raise_on_status=False,
+        ),
     )
-    return boto3.client(
-        "s3",
-        endpoint_url=endpoint_url,
-        region_name=region_name,
-        aws_access_key_id=access_key_id,
-        aws_secret_access_key=secret_access_key,
-        config=client_config,
+    return Minio(
+        endpoint,
+        access_key=access_key_id,
+        secret_key=secret_access_key,
+        secure=secure,
+        region=region_name,
+        http_client=http_client,
     )
-
-
-def is_not_found(error):
-    code = str(error.response.get("Error", {}).get("Code", ""))
-    return code in ("404", "NoSuchKey", "NotFound")
 
 
 def remote_sha256(metadata):
     for key, value in (metadata or {}).items():
-        if key.lower() == "sha256":
-            return value
+        normalized = str(key).lower()
+        if normalized.startswith("x-amz-meta-"):
+            normalized = normalized[len("x-amz-meta-") :]
+        if normalized == "sha256":
+            return str(value)
     return None
 
 
@@ -152,48 +173,49 @@ def archive_files(data_dir):
     return sorted(path for path in archive_root.rglob("*") if path.is_file() and not path.name.endswith(".tmp"))
 
 
+def host_object_prefix(prefix, host_id):
+    clean_prefix = prefix.strip("/")
+    host = safe_component(host_id)
+    return "%s/%s/" % (clean_prefix, host) if clean_prefix else "%s/" % host
+
+
 def object_key(archive_root, path, prefix, host_id):
     relative = path.relative_to(archive_root).as_posix()
-    return "%s/%s/%s" % (prefix.strip("/"), safe_component(host_id), relative)
+    return host_object_prefix(prefix, host_id) + relative
 
 
-def head_matches(client, bucket, key, size, digest):
-    try:
-        response = client.head_object(Bucket=bucket, Key=key)
-    except Exception as error:
-        if hasattr(error, "response") and is_not_found(error):
-            return False, None
-        raise
-    remote_digest = remote_sha256(response.get("Metadata", {}))
-    if response.get("ContentLength") != size or remote_digest != digest:
-        raise RuntimeError("remote object exists with different content: s3://%s/%s" % (bucket, key))
-    return True, response
+def remote_inventory(client, bucket, prefix, host_id):
+    inventory = {}
+    object_prefix = host_object_prefix(prefix, host_id)
+    for remote in client.list_objects(
+        bucket,
+        prefix=object_prefix,
+        recursive=True,
+        include_user_meta=True,
+    ):
+        inventory[remote.object_name] = remote
+    return inventory
 
 
-def upload_one(client, bucket, key, path, digest, verify=True):
-    from boto3.s3.transfer import TransferConfig
+def remote_matches(remote, size, digest):
+    return (
+        remote is not None
+        and int(getattr(remote, "size", -1)) == size
+        and remote_sha256(getattr(remote, "metadata", None)) == digest
+    )
 
+
+def upload_one(client, bucket, key, path, digest):
     content_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
-    client.upload_file(
-        str(path),
+    client.fput_object(
         bucket,
         key,
-        ExtraArgs={
-            "ContentType": content_type,
-            "Metadata": {"sha256": digest, "source-size": str(path.stat().st_size)},
-        },
-        Config=TransferConfig(
-            multipart_threshold=8 * 1024 * 1024,
-            multipart_chunksize=8 * 1024 * 1024,
-            max_concurrency=4,
-            use_threads=True,
-        ),
+        str(path),
+        content_type=content_type,
+        metadata={"sha256": digest, "source-size": str(path.stat().st_size)},
+        part_size=8 * 1024 * 1024,
+        num_parallel_uploads=4,
     )
-    if not verify:
-        return
-    matched, _ = head_matches(client, bucket, key, path.stat().st_size, digest)
-    if not matched:
-        raise RuntimeError("uploaded object could not be verified: s3://%s/%s" % (bucket, key))
 
 
 def main(argv=None):
@@ -208,13 +230,14 @@ def main(argv=None):
     environment_host_id = os.environ.get("AI_DATA_EXTRACTION_HOST_ID")
     host_id = args.host_id or environment_host_id or configured_host_id or socket.gethostname()
     bucket = config_value(config, "bucket", default=os.environ.get("S3_BUCKET", "ai-data-extraction"))
-    client = None if args.dry_run and not args.verify_only else build_client(config)
     archive_root = data_dir / "archive"
     files = archive_files(data_dir)
     if not files:
         print("no archive files found under %s" % archive_root)
         return 0
 
+    client = None if args.dry_run else build_client(config)
+    inventory = {} if args.dry_run else remote_inventory(client, bucket, args.prefix, str(host_id))
     uploaded = 0
     skipped = 0
     verified = 0
@@ -225,8 +248,10 @@ def main(argv=None):
             print("would upload s3://%s/%s (%d bytes)" % (bucket, key, path.stat().st_size))
             continue
 
-        matched, _ = head_matches(client, bucket, key, path.stat().st_size, digest)
-        if matched:
+        remote = inventory.get(key)
+        if remote is not None:
+            if not remote_matches(remote, path.stat().st_size, digest):
+                raise RuntimeError("remote object exists with different or missing metadata: s3://%s/%s" % (bucket, key))
             skipped += 1
             if args.verify_only:
                 verified += 1

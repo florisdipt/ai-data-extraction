@@ -11,8 +11,9 @@ working directories. It keeps raw extractor output, extractor logs, run
 manifests, and content-hashed session snapshots.
 
 `upload_all_to_s3_compatible.py` uploads the local archive to an S3-compatible
-bucket. It skips objects with matching size and SHA-256 metadata. It never
-deletes remote objects.
+bucket through the MinIO Python SDK. It builds one remote inventory for the
+host, skips objects with matching size and SHA-256 metadata, and never makes
+per-object `HEAD` requests or deletes remote objects.
 
 The archive can contain secrets, proprietary code, and personal paths. Keep the
 configuration file outside Git and restrict access to the MinIO bucket.
@@ -151,8 +152,8 @@ Extracts from OpenCode (CLI + Desktop)
 
 ```bash
 # The individual extractors use Python 3 standard-library modules.
-# The archive uploader installs boto3 through scripts/install_linux.sh.
-python3 --version  # Ensure Python 3.6+ is installed
+# The archive uploader installs the MinIO Python SDK through the installer.
+python3 --version  # Ensure Python 3.9+ is installed
 ```
 
 ### Basic Usage
