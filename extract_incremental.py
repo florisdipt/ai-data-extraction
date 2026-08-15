@@ -395,6 +395,7 @@ def parse_args(argv=None):
 
 
 def main(argv=None):
+    os.umask(0o077)
     args = parse_args(argv)
     repo_root = args.repo_root.expanduser().resolve()
     data_dir = args.data_dir.expanduser().resolve()

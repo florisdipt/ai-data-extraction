@@ -197,6 +197,7 @@ def upload_one(client, bucket, key, path, digest, verify=True):
 
 
 def main(argv=None):
+    os.umask(0o077)
     args = parse_args(argv)
     config_path = find_config(args.config)
     config = load_config(config_path)
