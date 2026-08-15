@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly AI data extraction and archive upload
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=ai-data-extraction.service
+
+[Install]
+WantedBy=timers.target

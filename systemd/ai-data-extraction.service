@@ -1,0 +1,15 @@
+[Unit]
+Description=AI data extraction and append-only archive upload
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=@REPO_ROOT@
+EnvironmentFile=-@CONFIG_DIR@/environment
+Environment=AI_DATA_EXTRACTION_CONFIG=@CONFIG_DIR@/config.json
+Environment=AI_DATA_EXTRACTION_DATA_DIR=@DATA_DIR@
+Environment=AI_DATA_EXTRACTION_STATE_DIR=@STATE_DIR@
+ExecStart=/usr/bin/flock -n @STATE_DIR@/run.lock @REPO_ROOT@/scripts/run_backup_once.sh
+UMask=0077
+TimeoutStartSec=0

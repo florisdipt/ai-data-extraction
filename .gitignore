@@ -1,6 +1,14 @@
 # Exclude extracted data (user's private conversations)
 extracted_data/
 
+# Local append-only archive and runtime state
+data/
+.venv/
+.config/
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+
 # Python cache
 __pycache__/
 *.pyc

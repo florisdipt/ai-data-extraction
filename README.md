@@ -2,6 +2,61 @@
 
 Complete toolkit to extract ALL chat, agent, and code context data from AI coding assistants for machine learning training.
 
+## Company archive mode
+
+This fork adds an append-only archive for repeated extraction runs.
+
+`extract_incremental.py` runs all supported Python extractors in isolated
+working directories. It keeps raw extractor output, extractor logs, run
+manifests, and content-hashed session snapshots.
+
+`upload_all_to_s3_compatible.py` uploads the local archive to an S3-compatible
+bucket. It skips objects with matching size and SHA-256 metadata. It never
+deletes remote objects.
+
+The archive can contain secrets, proprietary code, and personal paths. Keep the
+configuration file outside Git and restrict access to the MinIO bucket.
+
+### Linux setup
+
+Install the Python dependency and the Linux runner:
+
+```bash
+python3 scripts/install_linux.sh
+```
+
+Create the private configuration file at
+`~/.config/ai-data-extraction/config.json`. Use `config.example.json` as the
+shape. Run one backup before you start the timer:
+
+```bash
+scripts/run_backup_once.sh
+```
+
+On a Linux host with systemd, start the installed timer. A root install uses a
+system timer; a non-root install uses a user timer:
+
+```bash
+systemctl start ai-data-extraction.timer
+systemctl status ai-data-extraction.timer
+# For a non-root install, use: systemctl --user start ai-data-extraction.timer
+```
+
+On a Linux container without systemd, open a new interactive shell after the
+installer adds its guarded `.bashrc` hook. The hook starts one supervisor and
+stores its process ID under the XDG state directory.
+
+### Manual macOS run
+
+Install the dependency with the same installer or with a Python virtual
+environment. Then run this command when you want one native macOS export:
+
+```bash
+scripts/run_macos_once.sh
+```
+
+This project does not install a macOS scheduler.
+
 ## 🎯 What This Does
 
 Automatically discovers and extracts **complete conversation history** including:
@@ -95,7 +150,8 @@ Extracts from OpenCode (CLI + Desktop)
 ### Installation
 
 ```bash
-# No dependencies required - uses Python 3 standard library
+# The individual extractors use Python 3 standard-library modules.
+# The archive uploader installs boto3 through scripts/install_linux.sh.
 python3 --version  # Ensure Python 3.6+ is installed
 ```
 

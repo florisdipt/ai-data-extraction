@@ -1,0 +1,9 @@
+{
+  "endpoint_url": "https://lagg.in",
+  "bucket": "ai-data-extraction",
+  "region": "global",
+  "access_key_id": "REPLACE_WITH_SCOPED_ACCESS_KEY",
+  "secret_access_key": "REPLACE_WITH_SCOPED_SECRET_KEY",
+  "host_id": "linux-host-id",
+  "data_dir": "/var/lib/ai-data-extraction"
+}
