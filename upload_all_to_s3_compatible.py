@@ -204,11 +204,9 @@ def main(argv=None):
     configured_data_dir = config_value(config, "data_dir")
     environment_data_dir = os.environ.get("AI_DATA_EXTRACTION_DATA_DIR")
     data_dir = (args.data_dir or Path(environment_data_dir or configured_data_dir or default_data_dir())).expanduser().resolve()
-    host_id = args.host_id or config_value(
-        config,
-        "host_id",
-        default=os.environ.get("AI_DATA_EXTRACTION_HOST_ID", socket.gethostname()),
-    )
+    configured_host_id = config_value(config, "host_id")
+    environment_host_id = os.environ.get("AI_DATA_EXTRACTION_HOST_ID")
+    host_id = args.host_id or environment_host_id or configured_host_id or socket.gethostname()
     bucket = config_value(config, "bucket", default=os.environ.get("S3_BUCKET", "ai-data-extraction"))
     client = None if args.dry_run and not args.verify_only else build_client(config)
     archive_root = data_dir / "archive"

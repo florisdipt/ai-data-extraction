@@ -123,6 +123,50 @@ class UploadTests(unittest.TestCase):
 
             self.assertEqual(len(client.objects), 1)
 
+    def test_environment_path_and_host_override_config_defaults(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data_dir = root / "native-data"
+            archive = data_dir / "archive" / "sessions" / "fake" / "session"
+            archive.mkdir(parents=True)
+            (archive / "hash.jsonl").write_bytes(b'{"messages": []}\n')
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "endpoint_url": "https://example.invalid",
+                        "bucket": "ai-data-extraction",
+                        "region": "global",
+                        "access_key_id": "test",
+                        "secret_access_key": "test",
+                        "host_id": "config-host",
+                        "data_dir": str(root / "wrong-data"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+            client = FakeS3Client()
+
+            def fake_upload(client_arg, bucket, key, path, digest, verify=True):
+                client_arg.put_local(bucket, key, path, digest)
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "AI_DATA_EXTRACTION_DATA_DIR": str(data_dir),
+                    "AI_DATA_EXTRACTION_HOST_ID": "macos-test-host",
+                },
+            ):
+                with mock.patch.object(upload_all_to_s3_compatible, "build_client", return_value=client):
+                    with mock.patch.object(upload_all_to_s3_compatible, "upload_one", side_effect=fake_upload):
+                        self.assertEqual(upload_all_to_s3_compatible.main(["--config", str(config_path)]), 0)
+
+            self.assertIn(
+                ("ai-data-extraction", "hosts/macos-test-host/sessions/fake/session/hash.jsonl"),
+                client.objects,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

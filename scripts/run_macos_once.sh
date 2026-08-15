@@ -7,7 +7,26 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PYTHON_BIN="${AI_DATA_EXTRACTION_PYTHON:-${REPO_ROOT}/.venv/bin/python3}"
 
 if [[ ! -x "${PYTHON_BIN}" ]]; then
-    PYTHON_BIN="$(command -v python3)"
+    for candidate in python3 python; do
+        if command -v "${candidate}" >/dev/null 2>&1; then
+            PYTHON_BIN="$(command -v "${candidate}")"
+            break
+        fi
+    done
+fi
+
+if [[ ! -x "${PYTHON_BIN}" ]]; then
+    echo "A working Python 3 executable is required. Set AI_DATA_EXTRACTION_PYTHON." >&2
+    exit 1
+fi
+
+if [[ "${PYTHON_BIN}" != "${REPO_ROOT}/.venv/bin/python3" ]]; then
+    "${PYTHON_BIN}" -m venv "${REPO_ROOT}/.venv"
+    PYTHON_BIN="${REPO_ROOT}/.venv/bin/python3"
+fi
+
+if ! "${PYTHON_BIN}" -c 'import boto3' >/dev/null 2>&1; then
+    "${PYTHON_BIN}" -m pip install -r "${REPO_ROOT}/requirements.txt"
 fi
 
 if [[ -z "${AI_DATA_EXTRACTION_HOST_ID:-}" ]]; then
