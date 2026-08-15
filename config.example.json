@@ -4,6 +4,6 @@
   "region": "global",
   "access_key_id": "REPLACE_WITH_SCOPED_ACCESS_KEY",
   "secret_access_key": "REPLACE_WITH_SCOPED_SECRET_KEY",
-  "host_id": "linux-host-id",
-  "data_dir": "/var/lib/ai-data-extraction"
+  "host_id": "host-id",
+  "data_dir": "~/.local/share/ai-data-extraction"
 }
